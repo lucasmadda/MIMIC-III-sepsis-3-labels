@@ -11,8 +11,11 @@ If you don't have yet built MIMIC-III dataset in a postgres database, you can ju
 > [!IMPORTANT]
 > We're using Postgres 16 in this project.
 
-First make sure all the requirements in ```requirements.txt``` are met:
+Make sure all the requirements in ```requirements.txt``` are met:
 ```pip install -r requirements.txt```
+
+> [!IMPORTANT]
+> This code was originally ran under 3.10 version of Python.
 
 Then run:
 `python make_labels.py -u SQLUSER -pw SQLPASS -host HOST -db DBNAME`
