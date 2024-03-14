@@ -20,7 +20,7 @@ Make sure all the requirements in ```requirements.txt``` are met:
 Then run:
 `python make_labels.py -u SQLUSER -pw SQLPASS -host HOST -db DBNAME`
 
-By default, `make_labels.py` uses the following parameters:
+Notice that all arguments are optional, by default, `make_labels.py` uses the following parameters:
 
 * Database name: `mimic`
 * User name: `postgres`
