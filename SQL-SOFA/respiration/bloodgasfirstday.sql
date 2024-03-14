@@ -1,12 +1,9 @@
-
 -- The aim of this query is to pivot entries related to blood gases and
 -- chemistry values which were found in LABEVENTS
-
 -- things to check:
 --  when a mixed venous/arterial blood sample are taken at the same time, is the store time different?
-
-DROP MATERIALIZED VIEW IF EXISTS resp_bloodgasfirstday CASCADE;
-create materialized view resp_bloodgasfirstday as
+DROP MATERIALIZED VIEW IF EXISTS mimiciii_sofa.resp_bloodgasfirstday CASCADE;
+create materialized view mimiciii_sofa.resp_bloodgasfirstday as
 with pvt as
 ( -- begin query that extracts the data
   select ha.subject_id, ha.hadm_id
@@ -45,7 +42,6 @@ with pvt as
            -- conservative upper limit
         else valuenum
         end as valuenum
-
     from admissions ha
     left join labevents le
       on le.subject_id = ha.subject_id and le.hadm_id = ha.hadm_id
@@ -73,7 +69,6 @@ select pvt.SUBJECT_ID, pvt.HADM_ID, pvt.CHARTTIME
 -- RESPIRATION VALS
 , max(case when label = 'PO2'               then valuenum else null end) as PO2 -- KEEP
 , max(case when label = 'FIO2'              then valuenum else null end) as FIO2 -- KEEP
-
 from pvt
 group by pvt.subject_id, pvt.hadm_id, pvt.CHARTTIME
 order by pvt.subject_id, pvt.hadm_id, pvt.CHARTTIME;

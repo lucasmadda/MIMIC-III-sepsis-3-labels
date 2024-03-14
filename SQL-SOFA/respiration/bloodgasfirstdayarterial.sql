@@ -1,5 +1,5 @@
-DROP MATERIALIZED VIEW IF EXISTS resp_bloodgasfirstdayarterial CASCADE;
-CREATE MATERIALIZED VIEW resp_bloodgasfirstdayarterial AS
+DROP MATERIALIZED VIEW IF EXISTS mimiciii_sofa.resp_bloodgasfirstdayarterial CASCADE;
+CREATE MATERIALIZED VIEW mimiciii_sofa.resp_bloodgasfirstdayarterial AS
 -- export from chartevents SoP2 data
 with stg_spo2 as
 (
@@ -58,7 +58,7 @@ with stg_spo2 as
 select bg.*
   , ROW_NUMBER() OVER (partition by bg.hadm_id, bg.charttime order by s1.charttime DESC) as lastRowSpO2 -- keep
   , s1.spo2 -- keep
-from resp_bloodgasfirstday bg
+from mimiciii_sofa.resp_bloodgasfirstday bg
 left join stg_spo2 s1
   -- same patient
   on  bg.hadm_id = s1.hadm_id
@@ -80,7 +80,6 @@ select bg.subject_id, bg.hadm_id, bg.charttime
       when bg2.charttime >= s2.charttime then coalesce(bg2.FIO2, s2.fio2_chartevents)
       else coalesce(s2.fio2_chartevents, bg2.FIO2) end
       as FIO2_val
-
   -- create our specimen prediction
   -- data conditioned on this for some reason
   ,  1/(1+exp(-(-0.02544

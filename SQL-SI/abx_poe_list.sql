@@ -1,12 +1,10 @@
 /*
-- ORIGINAL VERSION. 
+- ORIGINAL VERSION.
 - SOURCE: https://github.com/alistairewj/sepsis3-mimic/blob/master/query/tbls/abx-poe-list.sql
 - DOWNLOADED on 10th January 2018
 */
-
-
-DROP TABLE IF EXISTS abx_poe_list CASCADE;
-CREATE TABLE abx_poe_list AS
+DROP TABLE IF EXISTS mimiciii_si.abx_poe_list CASCADE;
+CREATE TABLE mimiciii_si.abx_poe_list AS
 with t1 as
 (
   select

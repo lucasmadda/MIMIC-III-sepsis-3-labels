@@ -1,13 +1,10 @@
 -- This query pivots lab values taken in the first 24 hours of a patient's stay
-
 -- Have already confirmed that the unit of measurement is always the same: null or the correct unit
-
-DROP MATERIALIZED VIEW IF EXISTS coag_labsperhour CASCADE;
-CREATE materialized VIEW coag_labsperhour AS
+DROP MATERIALIZED VIEW IF EXISTS mimiciii_sofa.coag_labsperhour CASCADE;
+CREATE materialized VIEW mimiciii_sofa.coag_labsperhour AS
 SELECT
   pvt.subject_id, pvt.hadm_id, pvt.HLOS
   , min(CASE WHEN label = 'PLATELET' THEN valuenum ELSE null END) as PLATELET
-
 FROM
 ( -- begin query that extracts the data
   SELECT ha.subject_id, ha.hadm_id
@@ -23,16 +20,13 @@ FROM
       WHEN itemid = 51265 and valuenum > 10000 THEN null -- K/uL 'PLATELET'
     ELSE le.valuenum
     END AS valuenum
-
   , (date_part('year', age(le.charttime, ha.admittime))*365 * 24
     + date_part('month', age(le.charttime, ha.admittime))*365/12 * 24
     + date_part('day', age(le.charttime, ha.admittime))* 24
     + date_part('hour', age(le.charttime, ha.admittime))
     + round(date_part('minute', age(le.charttime, ha.admittime))/60)) as HLOS
-
-  FROM mimic3.admissions ha
-
-  LEFT JOIN mimic3.labevents le
+  FROM admissions ha
+  LEFT JOIN labevents le
     ON le.hadm_id = ha.hadm_id
     AND le.charttime BETWEEN (ha.admittime - interval '1' day) AND ha.dischtime
     AND le.ITEMID in

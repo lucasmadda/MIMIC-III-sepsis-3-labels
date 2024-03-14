@@ -11,13 +11,10 @@
 --        a) documented extubation ends the current ventilation
 --        b) initiation of non-invasive vent and/or oxygen ends the current vent
 -- The ventilation events are numbered consecutively by the `num` column.
-
 -- PART II
-
-
 --DROP MATERIALIZED VIEW IF EXISTS VENTDURATIONS CASCADE;
-DROP MATERIALIZED VIEW IF EXISTS mimic3_mrosnati.VENTDURATIONS CASCADE;
-create MATERIALIZED VIEW mimic3_mrosnati.ventdurations as
+DROP MATERIALIZED VIEW IF EXISTS mimiciii_sofa.VENTDURATIONS CASCADE;
+create MATERIALIZED VIEW mimiciii_sofa.ventdurations as
 with vd0 as
 (
   select
@@ -33,7 +30,7 @@ with vd0 as
     , OxygenTherapy
     , Extubated
     , SelfExtubated
-  from mimic3_mrosnati.ventsettings
+  from mimiciii_sofa.ventsettings
 )
 , vd1 as
 (
@@ -45,7 +42,6 @@ with vd0 as
       , OxygenTherapy
       , Extubated
       , SelfExtubated
-
       -- if this is a mechanical ventilation event, we calculate the time since the last event
       , case
           -- if the current observation indicates mechanical ventilation is present
@@ -54,14 +50,12 @@ with vd0 as
             CHARTTIME - charttime_lag
           else null
         end as ventduration
-
       , LAG(Extubated,1)
       OVER
       (
       partition by icustay_id, case when MechVent=1 or Extubated=1 then 1 else 0 end
       order by charttime
       ) as ExtubatedLag
-
       -- now we determine if the current mech vent event is a "new", i.e. they've just been intubated
       , case
         -- if there is an extubation flag, we mark any subsequent ventilation as a new ventilation event

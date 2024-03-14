@@ -1,319 +1,242 @@
 import os
 import sys
-
+import time
+import argparse
 import pandas as pd
-import psycopg2
+import psycopg
 from sqlalchemy import create_engine
-from sqlalchemy.types import Integer, DateTime
+import warnings
+warnings.filterwarnings('ignore', category=UserWarning)
+
+def generate_SI_data(args):
+    """
+    Generate tables to calculate suspicion of infection
+    :return:
+    """
+
+    conn = psycopg.connect(dbname=args.dbname,
+                           user=args.sqluser,
+                           password=args.sqlpass,
+                           host = args.host,
+                           port = args.port)
+
+    cursor = conn.cursor()
+    cursor.execute("""
+    DROP SCHEMA IF EXISTS mimiciii_si CASCADE;
+    CREATE SCHEMA mimiciii_si;
+    SET search_path = "mimiciii";
+    """)
+    start = time.time()
+    print("creating abx_poe_list...")
+    cursor.execute(open("./SQL-SI/abx_poe_list.sql", "r").read())
+    print("... done. Time taken: {} sec".format(time.time() - start))
+    start = time.time()
+    print("creating abx_micro_poe...")
+    cursor.execute(open("./SQL-SI/abx_micro_poe.sql", "r").read())
+    print("... done. Time taken: {} sec".format(time.time() - start))
+    start = time.time()
+    print("creating SI...")
+    cursor.execute(open("./SQL-SI/SI.sql", "r").read())
+    print("... done. Time taken: {} sec".format(time.time() - start))
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+def generate_SOFA_data(args):
+    """
+    Generate tables to calculate suspicion of infection
+    :return:
+    """
+
+    conn = psycopg.connect(dbname=args.dbname,
+                           user=args.sqluser,
+                           password=args.sqlpass,
+                           host=args.host,
+                           port=args.port)
+
+    cursor = conn.cursor()
+    cursor.execute("""
+    DROP SCHEMA IF EXISTS mimiciii_sofa CASCADE;
+    CREATE SCHEMA mimiciii_sofa;
+    SET search_path = "mimiciii";
+    """)
+
+    # SOFA CARDIO
+
+    start = time.time()
+    print("calculating cardio contribution to SOFA...")
+    cursor.execute(open("./SQL-SOFA/cardiovascular/echo.sql", "r").read())
+    cursor.execute(open("./SQL-SOFA/cardiovascular/vitalsperhour.sql", "r").read())
+    cursor.execute(open("./SQL-SOFA/cardiovascular/cardio_SOFA.sql", "r").read())
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
+
+    # SOFA Central Nervous System
+
+    start = time.time()
+    print("calculating central nervous system contribution to SOFA...")
+    cursor.execute(open("./SQL-SOFA/central_nervous_system/gcsperhour.sql", "r").read())
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
+
+    # SOFA Coagulation
+    start = time.time()
+    print("calculating coagulation contribution to SOFA...")
+    cursor.execute(open("./SQL-SOFA/coagulation/labsperhour.sql", "r").read())
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
+
+    # SOFA liver
+    start = time.time()
+    print("calculating liver contribution to SOFA...")
+    cursor.execute(open("./SQL-SOFA/liver/labsperhour.sql", "r").read())
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
+
+    # SOFA renal
+    start = time.time()
+    print("calculating renal contribution to SOFA...")
+    cursor.execute(open("./SQL-SOFA/renal/labsperhour.sql", "r").read())
+    cursor.execute(open("./SQL-SOFA/renal/uoperhour.sql", "r").read())
+    cursor.execute(open("./SQL-SOFA/renal/runninguo24h.sql", "r").read())
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
+
+    # SOFA respiration
+    start = time.time()
+    print("calculating respiration contribution to SOFA...")
+    cursor.execute(open("./SQL-SOFA/respiration/ventsettings.sql", "r").read())
+    cursor.execute(open("./SQL-SOFA/respiration/ventdurations.sql", "r").read())
+    cursor.execute(open("./SQL-SOFA/respiration/bloodgasfirstday.sql", "r").read())
+    cursor.execute(open("./SQL-SOFA/respiration/bloodgasfirstdayarterial.sql", "r").read())
+    cursor.execute(open("./SQL-SOFA/respiration/resp_SOFA.sql", "r").read())
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
+
+    # Combining scores
+    start = time.time()
+    print("combining scores...")
+    cursor.execute(open("./SQL-SOFA/hourly_table.sql", "r").read())
+    cursor.execute(open("./SQL-SOFA/SOFA.sql", "r").read())
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
+
+    cursor.close()
+    conn.close()
+
+def generate_sepsis_labels(args):
+    """
+    Generate sepsis onset time for all hadm_id
+    :return:
+    """
+
+    conn = psycopg.connect(dbname=args.dbname,
+                           user=args.sqluser,
+                           password=args.sqlpass,
+                           host=args.host,
+                           port=args.port)
+
+    cursor = conn.cursor()
+    cursor.execute("""
+    DROP SCHEMA IF EXISTS mimiciii_sepsislabels CASCADE;
+    CREATE SCHEMA mimiciii_sepsislabels;
+    SET search_path = "mimiciii";
+    """)
 
 
-class make_labels:
+    # sepsis within SI
+    start = time.time()
+    print("calculating sofa within SI...")
+    cursor.execute(open("./SOFA_within_SI.sql", "r").read())
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
 
-    def __init__(self, 
-                 sqluser,
-                 sqlpass,
-                 host,
-                 dbname,
-                 schema_write_name,
-                 schema_read_name,
-                 path):
-        """
-        Initialise function
-        :param sqluser:             user name
-        :param schema_write_name:   schema with write access
-        :param schema_read_name:    schema where mimic is saved
-        """
-        # specify user/password/where the database is
-        self.sqluser = sqluser
-        self.sqlpass = sqlpass
-        self.dbname = dbname
-        self.host = host
-        if schema_write_name is not None:
-            self.query_schema = 'SET search_path to ' + schema_write_name + ','+schema_read_name+';'
-        else:
-            self.query_schema = 'SET search_path to ' + schema_write_name + ';'
-        if path is None:    
-            self.cwd = os.path.dirname(os.path.abspath(__file__))
-            self.path = os.path.abspath(os.path.join(self.cwd, os.pardir, os.pardir, os.pardir))
-        else:
-            self.path = path
+    start = time.time()
+    print("creating sepsis onset table...")
 
-    def generate_all_sepsis_onset(self):
-        """
-        Generate sepsis onset time for all hadm_id
-        :return:
-        """
-        # step I : filter SOFA within SI window
-        q = """
-        select si.hadm_id
-        , SOFA
-        , SOFAresp
-        , SOFAcoag
-        , SOFAliv
-        , SOFAcardio
-        , SOFAgcs
-        , SOFAren
-        , so.hlos as h_from_admission
-        , ha.admittime + so.hlos * interval '1 hour' as sepsis_time
-        from SOFAperhour so 
-        join SI_flag si 
-        on si.hadm_id = so.hadm_id
-        left join admissions ha 
-        on ha.hadm_id = so.hadm_id
-        where  ha.admittime + so.hlos * interval '1 hour' between si_start - interval '1 hour' and si_end
-        and so.hlos>= 0
-        order by hadm_id, sepsis_time
-        """
-        self.sofa_within_si = self.build_df(q)
-        t_print("built sofa_within_si")
-        # translate date into pandas format
-        self.sofa_within_si["sepsis_time"] = self.sofa_within_si["sepsis_time"]. \
-            apply(str).apply(lambda x: datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S"))
-        # calculate the first derivative of each SOFA score part
-        #       first look for the previous value
+    df = pd.read_sql("SELECT * FROM mimiciii_sepsislabels.SOFA_within_SI", conn)
 
-        self.sofa_within_si["h_in_SI_window"] = self.sofa_within_si.sort_values(['hadm_id', 'sepsis_time'],
-                                                                                ascending=[True, True]) \
-                                                    .groupby(['hadm_id']) \
-                                                    .cumcount() - 1
+    # calculate the first derivative of each SOFA score part
+    #       first look for the previous value
 
-        columns = ['sofa', 'sofaresp', 'sofacoag', 'sofaliv', 'sofacardio', 'sofagcs', 'sofaren']
-        #       then calculate the delta
+    df["h_in_SI_window"] = df.sort_values(['hadm_id', 'sepsis_time'],
+                                          ascending=[True, True]).groupby('hadm_id').cumcount() - 1
 
-        t_print("calculating deltas ...")
-        for col in columns:
-            t_print("for col {}".format(col))
-            self.sofa_within_si[col + "_temp"] = self.sofa_within_si[col]
-            self.sofa_within_si[col + "_temp"].fillna(value=0, inplace=True)
-            self.sofa_within_si[col + "_min"] = self.sofa_within_si.sort_values(['hadm_id', 'sepsis_time'],
-                                                                                ascending=[True, True]) \
-                .groupby(['hadm_id']) \
-                .cummin()[col + "_temp"]
-            self.sofa_within_si[col + "_delta"] = self.sofa_within_si[col + "_temp"] - self.sofa_within_si[col + "_min"]
-            self.sofa_within_si.drop(columns=[col + "_temp"], inplace=True)
+    columns = ['sofa', 'sofaresp', 'sofacoag', 'sofaliv', 'sofacardio', 'sofagcs', 'sofaren']
+    #       then calculate the delta
 
-        self.sofa_within_si["sepsis_onset"] = 0
-        self.sofa_within_si.loc[self.sofa_within_si.sofa_delta >= 2, "sepsis_onset"] = 1
+    ####put time calculation
+    for col in columns:
 
-        # save
-        path = self.path + "/data/interim/"
-        self.sofa_within_si.to_csv(path + "19-06-12-detailed-case-labels.csv")
+        df[col + "_temp"] = df[col]
+        df[col + "_temp"] = df[col + "_temp"].fillna(value=0)
+        df[col + "_min"] = df.sort_values(by=['hadm_id', 'sepsis_time'],
+                                          ascending=[True, True]).groupby('hadm_id').cummin()[col + "_temp"]
+        df[col + "_delta"] = df[col + "_temp"] - df[col + "_min"]
+        df = df.drop(columns=[col + "_temp"])
 
-    def filter_first_sepsis_onset(self):
-        # rank occurrences of positive sepsis onset per hadm_id by timestamp
-        self.sofa_within_si.loc[self.sofa_within_si.sepsis_onset == 1, "ranked_onsets"] = \
-            self.sofa_within_si[self.sofa_within_si.sepsis_onset == 1].groupby("hadm_id").cumcount() + 1
-        # filter by first occurrence
-        self.sofa_within_si = self.sofa_within_si[(self.sofa_within_si.sepsis_onset == 1)
-                                                  & (self.sofa_within_si.ranked_onsets == 1)]
-        path = os.path.abspath(os.path.join(self.cwd, os.pardir, os.pardir, os.pardir)) + "/data/interim/"
-        self.sofa_within_si.to_csv(path + "19-06-12-sepsis_onsets.csv")
+    df["sepsis_onset"] = 0
+    df.loc[df.sofa_delta >= 2, "sepsis_onset"] = 1
 
-    def save_to_postgres(self):
-        engine = create_engine('postgresql+psycopg2://{0}:{1}@{2}:5432/mimic3'.format(self.sqluser,
-                                                                                      self.sqlpass,
-                                                                                      self.host))
-        self.sofa_within_si.rename(columns={"sofa_delta": "delta_score"}, inplace=True)
-        # somehow we cannot overwrite tables directly with "to_sql" so let's do that before
-        conn = psycopg2.connect(dbname=self.dbname,
-                                user=self.sqluser,
-                                password=self.sqlpass,
-                                host=self.host)
-        cur = conn.cursor()
-        cur.execute(self.query_schema + "drop table IF EXISTS sepsis_onset cascade")
-        conn.commit()
-        # now let's fill it again
-        self.sofa_within_si[['hadm_id',
-                             'sofa',
-                             'sofaresp',
-                             'sofacoag',
-                             'sofaliv',
-                             'sofacardio',
-                             'sofagcs',
-                             'sofaren',
-                             'sepsis_time',
-                             'sepsis_onset',
-                             'delta_score',
-                             'sofaresp_delta', 'sofacoag_delta', 'sofaliv_delta',
-                             'sofacardio_delta', 'sofagcs_delta', 'sofaren_delta']] \
-            .to_sql("sepsis_onset",
-                    engine,
-                    if_exists='append',
-                    schema="mimic3_mrosnati",
-                    dtype={"hadm_id": Integer(),
-                           "sofa": Integer(),
-                           'sofaresp': Integer(),
-                           'sofacoag': Integer(),
-                           'sofaliv': Integer(),
-                           'sofacardio': Integer(),
-                           'sofagcs': Integer(),
-                           'sofaren': Integer(),
-                           "sepsis_time": DateTime(),
-                           "delta_score": Integer(),
-                           'sofaresp_delta': Integer(),
-                           'sofacoag_delta': Integer(),
-                           'sofaliv_delta': Integer(),
-                           'sofacardio_delta': Integer(),
-                           'sofagcs_delta': Integer(),
-                           'sofaren_delta': Integer()})
-        self.create_table(sqlfile="/sofa_delta.sql")
+    # rank occurrences of positive sepsis onset per hadm_id by timestamp
+    df.loc[df.sepsis_onset == 1, "ranked_onsets"] = df[df.sepsis_onset == 1].groupby("hadm_id").cumcount() + 1
+    # filter by first occurrence
+    df = df[(df.sepsis_onset == 1) & (df.ranked_onsets == 1)]
 
-    def generate_sofa_delta_table(self):
-        self.create_table(sqlfile="/sofa_delta.sql")
-        path = self.path + "/data/interim/"
-        self.build_df("select * from sofa_delta").to_csv(path + "19-07-02-sofa-delta.csv")
+    df = df.rename(columns={"sofa_delta": "delta_score"})
+    # save to postgres
 
+    #had to use sqlalchemy because i was unable to use pandas to sql with just psycopg
+    engine = create_engine("postgresql+psycopg://{0}:{1}@{2}:{3}/{4}".format(args.sqluser,
+                                                                             args.sqlpass,
+                                                                             args.host,
+                                                                             args.port,
+                                                                             args.dbname))
+    df.to_sql('sepsis_onset',
+              engine,
+              if_exists='replace',
+              schema='mimiciii_sepsislabels',
+              index = False)
 
-    def generate_SI_data(self):
-        """
-        Generate tables to calculate suspicion of infection
-        :return:
-        """
-        # generate list of antibiotics
-        self.create_table(sqlfile="/SQL-SI/abx_poe_list.sql")
-        # generate table with hadm_id and all suspicion of infection times
-        self.create_table(sqlfile="/SQL-SI/abx_micro_poe.sql")
-        # filter for first suspicion of infection time
-        self.create_table(sqlfile="/SQL-SI/SI.sql")
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
 
-    def generate_SOFA_data(self):
-        start = time.time()
-        print("Calculating SOFA score")
-        print("Calculating cardio contribution ..")
-        self.SOFA_cardio()
-        print(".. done. Time taken: {} sec".format(time.time() - start))
-        start = time.time()
-        print("Calculating GCS contribution ..")
-        self.SOFA_c_n_s()
-        print(".. done. Time taken: {} sec".format(time.time() - start))
-        start = time.time()
-        print("Calculating coagulation contribution ..")
-        self.SOFA_coag()
-        print(".. done. Time taken: {} sec".format(time.time() - start))
-        start = time.time()
-        print("Calculating liver contribution ..")
-        self.SOFA_liv()
-        print(".. done. Time taken: {} sec".format(time.time() - start))
-        start = time.time()
-        print("Calculating renal contribution ..")
-        self.SOFA_ren()
-        print(".. done. Time taken: {} sec".format(time.time() - start))
-        start = time.time()
-        print("Calculating respiratory contribution ..")
-        self.SOFA_resp()
-        print(".. done. Time taken: {} sec".format(time.time() - start))
-        self.SOFA_last_steps()
+    start = time.time()
+    print("calculating sofa deltas and creating tables...")
+    conn.execute(open("./sofa_delta.sql", "r").read())
+    conn.commit()
+    print("... done. Time taken: {} sec".format(time.time() - start))
 
-    def SOFA_cardio(self):
-        path = "/SQL-SOFA/cardiovascular/"
-        self.create_table(sqlfile=path + "echo.sql")
-        self.create_table(sqlfile=path + "vitalsperhour.sql")
-        self.create_table(sqlfile=path + "cardio_SOFA.sql")
+    cursor.close()
+    conn.close()
 
-    def SOFA_c_n_s(self):
-        path = "/SQL-SOFA/central_nervous_system/"
-        self.create_table(sqlfile=path + "gcsperhour.sql")
-
-    def SOFA_coag(self):
-        path = "/SQL-SOFA/coagulation/"
-        self.create_table(sqlfile=path + "labsperhour.sql")
-
-    def SOFA_liv(self):
-        path = "/SQL-SOFA/liver/"
-        self.create_table(sqlfile=path + "labsperhour.sql")
-
-    def SOFA_ren(self):
-        path = "/SQL-SOFA/renal/"
-        self.create_table(sqlfile=path + "labsperhour.sql")
-        self.create_table(sqlfile=path + "uoperhour.sql")
-        self.create_table(sqlfile=path + "runninguo24h.sql")
-
-    def SOFA_resp(self):
-        path = "/SQL-SOFA/respiration/"
-        self.create_table(sqlfile=path + "ventsettings.sql")
-        self.create_table(sqlfile=path + "ventdurations.sql")
-        self.create_table(sqlfile=path + "bloodgasfirstday.sql")
-        self.create_table(sqlfile=path + "bloodgasfirstdayarterial.sql")
-        self.create_table(sqlfile=path + "resp_SOFA.sql")
-
-    def SOFA_last_steps(self):
-        start = time.time()
-        print("Combining score ..")
-        path = "/SQL-SOFA/"
-        self.create_table(sqlfile=path + "hourly_table.sql")
-        self.create_table(sqlfile=path + "SOFA.sql")
-        print(".. done. Time taken: {} sec".format(time.time() - start))
-        # print("Creating SOFA increase flag ..")
-        # start = time.time()
-        # self.create_table(sqlfile=path + "SOFA_flag.sql")
-        # print(".. done. Time taken: {} sec".format(time.time() - start))
-
-    def create_table(self, sqlfile):
-        ##
-        conn = psycopg2.connect(dbname=self.dbname,
-                                user=self.sqluser,
-                                password=self.sqlpass,
-                               host=self.host)
-        cur = conn.cursor()
-        file = self.cwd + sqlfile
-        with open(file, 'r') as openfile:
-            query = openfile.read()
-        openfile.close()
-        cur.execute(self.query_schema + query)
-        conn.commit()
-        conn.close()
-
-    def build_df(self, q_text):
-        con = psycopg2.connect(dbname=self.dbname,
-                               user=self.sqluser,
-                               password=self.sqlpass,
-                               host=self.host)
-        query = self.query_schema + q_text
-        return pd.read_sql_query(query, con)
-
-
-# Utilities
-def t_print(string):
-    T = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
-    print(T, " -- ", string)
-    sys.stdout.flush()
-
-
-def main(args):
-    labels = make_labels(sqluser=args.sqluser,
-                         sqlpass=args.sqlpass,
-                         host=args.host,
-                         dbname=args.dbname,
-                         schema_write_name=args.schema_write_name,
-                         schema_read_name=args.schema_read_name,
-                         path=args.output_path)
-    labels.generate_SI_data()
-    labels.generate_SOFA_data()
-    labels.generate_all_sepsis_onset()
-    labels.filter_first_sepsis_onset()
-    labels.save_to_postgres()
-    labels.generate_sofa_delta_table()
 
 
 def parse_arg():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-u", "--sqluser",
-                        help="SQL user")
+    parser.add_argument("-u","--sqluser",
+                        help="SQL user",
+                        default="postgres")
     parser.add_argument("-pw", "--sqlpass",
-                        help="SQL user password. If none insert ''")
-    parser.add_argument("-h", "--host",
-                        help="SQL host")
+                        help="SQL user password. If none insert ''",
+                        default="postgres")
+    parser.add_argument("-host", "--host",
+                        help="SQL host",
+                        default="localhost")
     parser.add_argument("-db", "--dbname",
-                        help="SQL database name")
-    parser.add_argument("-r", "--schema_read_name",
-                        help="SQL read/main schema name")
-    parser.add_argument("-w", "--schema_write_name",
-                        help="SQL write schema name (optional)", 
-                        default=None)
-    parser.add_argument("-o", "--output_path",
-                        help="where to save tables", 
-                        default=None)
+                        help="SQL database name",
+                        default="mimic")
+    parser.add_argument("-p", "--port",
+                        help="SQL port number",
+                        default="5432")
     return parser.parse_args()
+
+def main(args):
+
+    generate_SI_data(args)
+    generate_SOFA_data(args)
+    generate_sepsis_labels(args)
+
 
 
 if __name__ == '__main__':

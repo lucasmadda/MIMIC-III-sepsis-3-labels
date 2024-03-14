@@ -2,11 +2,10 @@
 -- The hours are based on clock-hours (i.e. 02:00, 03:00).
 -- The hour clock starts 24 hours before the first heart rate measurement.
 -- Note that the time of the first heart rate measurement is ceilinged to the hour.
-
 -- this query extracts the cohort and every possible hour they were in the ICU
 -- this table can be to other tables on ICUSTAY_ID and (ENDTIME - 1 hour,ENDTIME]
-DROP MATERIALIZED VIEW IF EXISTS hadms_hours CASCADE;
-CREATE MATERIALIZED VIEW hadms_hours as
+DROP MATERIALIZED VIEW IF EXISTS mimiciii_sofa.hadms_hours CASCADE;
+CREATE MATERIALIZED VIEW mimiciii_sofa.hadms_hours as
 -- get first/last measurement time
 with all_hours as
 (
@@ -24,7 +23,6 @@ with all_hours as
       -24,
       ceil(extract(EPOCH from ha.dischtime - ha.admittime)/60.0/60.0)::INTEGER
     ) as hr
-
   from admissions ha
 )
 SELECT

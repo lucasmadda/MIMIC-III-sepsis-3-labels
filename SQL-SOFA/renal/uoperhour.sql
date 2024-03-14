@@ -1,14 +1,11 @@
 -- ------------------------------------------------------------------
 -- Purpose: Create a view of the urine output for each ICUSTAY_ID over the first 24 hours.
 -- ------------------------------------------------------------------
-
-DROP MATERIALIZED VIEW IF EXISTS SOFA_uoperhour CASCADE;
-create materialized view SOFA_uoperhour as
-
+DROP MATERIALIZED VIEW IF EXISTS mimiciii_sofa.SOFA_uoperhour CASCADE;
+create materialized view mimiciii_sofa.SOFA_uoperhour as
 select
   -- patient identifiers
   ha.subject_id, ha.hadm_id, ie.icustay_id
-
   -- volumes associated with urine output ITEMIDs
   , sum(
       -- we consider input of GU irrigant as a negative volume
@@ -21,19 +18,17 @@ select
     + date_part('day', age(oe.charttime, ha.admittime))* 24
     + date_part('hour', age(oe.charttime, ha.admittime))
     + round(date_part('minute', age(oe.charttime, ha.admittime))/60)) as HLOS
-
   , (date_part('year', age(oe.charttime, ie.intime))*365 * 24
     + date_part('month', age(oe.charttime, ie.intime))*365/12 * 24
     + date_part('day', age(oe.charttime, ie.intime))* 24
     + date_part('hour', age(oe.charttime, ie.intime))
     + round(date_part('minute', age(oe.charttime, ie.intime))/60)) as ICULOS
-
-from mimic3.admissions ha
+from admissions ha
 -- Join to the outputevents table to get urine output
-left join mimic3.outputevents oe
+left join outputevents oe
 -- join on all patient identifiers
 on ha.subject_id = oe.subject_id and ha.hadm_id = oe.hadm_id
-left join mimic3.icustays ie
+left join icustays ie
   on ie.icustay_id = oe.icustay_id
 -- and ensure the data occurs during the first day
 and oe.charttime between (ha.admittime - interval '1' day) AND ha.dischtime
@@ -54,7 +49,6 @@ where itemid in
 40086,--	Urine Out Incontinent
 40096, -- "Urine Out Ureteral Stent #1"
 40651, -- "Urine Out Ureteral Stent #2"
-
 -- these are the most frequently occurring urine output observations in MetaVision
 226559, -- "Foley"
 226560, -- "Void"

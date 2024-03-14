@@ -1,18 +1,14 @@
 -- ITEMIDs used:
-
 -- CAREVUE
 --    723 as GCSVerbal
 --    454 as GCSMotor
 --    184 as GCSEyes
-
 -- METAVISION
 --    223900 GCS - Verbal Response
 --    223901 GCS - Motor Response
 --    220739 GCS - Eye Opening
-
 -- The code combines the ITEMIDs into the carevue itemids, then pivots those
 -- So 223900 is changed to 723, then the ITEMID 723 is pivoted to form GCSVerbal
-
 -- Note:
 --  The GCS for sedated patients is defaulted to 15 in this code.
 --  This is in line with how the data is meant to be collected.
@@ -20,29 +16,24 @@
 --    For sedated patients, the Glasgow Coma Score before sedation was used.
 --    This was ascertained either from interviewing the physician who ordered the sedation,
 --    or by reviewing the patient's medical record.
-
-DROP MATERIALIZED VIEW IF EXISTS SOFA_gcsperhour CASCADE;
-create materialized view SOFA_gcsperhour as
+DROP MATERIALIZED VIEW IF EXISTS mimiciii_sofa.SOFA_gcsperhour CASCADE;
+create materialized view mimiciii_sofa.SOFA_gcsperhour as
 with base as
 (
   SELECT pvt.hadm_id
   , pvt.charttime
-
   -- Easier names - note we coalesced Metavision and CareVue IDs below
   , max(case when pvt.itemid = 454 then pvt.valuenum else null end) as GCSMotor
   , max(case when pvt.itemid = 723 then pvt.valuenum else null end) as GCSVerbal
   , max(case when pvt.itemid = 184 then pvt.valuenum else null end) as GCSEyes
-
   -- If verbal was set to 0 in the below select, then this is an intubated patient
   , case
       when max(case when pvt.itemid = 723 then pvt.valuenum else null end) = 0
     then 1
     else 0
     end as EndoTrachFlag
-
   , ROW_NUMBER ()
           OVER (PARTITION BY pvt.hadm_id ORDER BY pvt.charttime ASC) as rn
-
   FROM  (
   select l.hadm_id
   -- merge the ITEMIDs so that the pivot applies to both metavision/carevue data
@@ -52,24 +43,19 @@ with base as
       when l.ITEMID in (184,220739) then 184
       else l.ITEMID end
     as ITEMID
-
   -- convert the data into a number, reserving a value of 0 for ET/Trach
   , case
       -- endotrach/vent is assigned a value of 0, later parsed specially
       when l.ITEMID = 723 and l.VALUE = '1.0 ET/Trach' then 0 -- carevue
       when l.ITEMID = 223900 and l.VALUE = 'No Response-ETT' then 0 -- metavision
-
       else VALUENUM
       end
     as VALUENUM
   , l.CHARTTIME
-  
-  from mimic3.CHARTEVENTS l
-
+  from CHARTEVENTS l
   -- get intime for charttime subselection
-  inner join mimic3.admissions ha
+  inner join admissions ha
     on l.hadm_id = ha.hadm_id
-
   -- Isolate the desired GCS variables
   where l.ITEMID in
   (
@@ -114,12 +100,10 @@ with base as
           + coalesce(b.GCSVerbal,coalesce(b2.GCSVerbal,5))
           + coalesce(b.GCSEyes,coalesce(b2.GCSEyes,4))
       end as GCS
-
   from base b
   -- join to itself within 6 hours to get previous value
   left join base b2
     on b.hadm_id = b2.hadm_id and b.rn = b2.rn+1 and b2.charttime > b.charttime - interval '6' hour
-
 )
 select ha.hadm_id
 -- The minimum GCS is determined by the above row partition, we only join if IsMinGCS=1
@@ -129,7 +113,7 @@ select ha.hadm_id
     + date_part('day', age(gs.charttime, ha.admittime))* 24
     + date_part('hour', age(gs.charttime, ha.admittime))
     + round(date_part('minute', age(gs.charttime, ha.admittime))/60)) as HLOS
-from mimic3.admissions ha
+from admissions ha
 left join gcs gs
   on ha.hadm_id = gs.hadm_id
 group by ha.hadm_id, HLOS

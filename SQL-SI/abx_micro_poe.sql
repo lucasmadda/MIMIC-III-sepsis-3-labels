@@ -3,10 +3,9 @@
 - SOURCE: https://github.com/alistairewj/sepsis3-mimic/blob/master/query/tbls/abx-micro-prescription.sql
 - DOWNLOADED on 8th February 2018
 */
-
 -- only works for metavision as carevue does not accurately document antibiotics
-DROP TABLE IF EXISTS abx_micro_poe CASCADE;
-CREATE TABLE abx_micro_poe as
+DROP TABLE IF EXISTS mimiciii_si.abx_micro_poe CASCADE;
+CREATE TABLE mimiciii_si.abx_micro_poe as
 -- mv tells us how many antibiotics were prescribed and when
 with mv as
 (
@@ -14,7 +13,7 @@ with mv as
   , count(mv.drug) as no_antibiotic
   , startdate as antibiotic_time
   from prescriptions mv
-  inner join abx_poe_list ab
+  inner join mimiciii_si.abx_poe_list ab
       on mv.drug = ab.drug
   group by hadm_id, antibiotic_time
 )
@@ -41,7 +40,6 @@ with mv as
     , coalesce(me24.charttime,me24.chartdate) as next24_charttime
     , case when me72.charttime is null then 'date' else 'time' end as last72
     , case when me24.charttime is null then 'date' else 'time' end as next24
-
     --, me72.positiveculture as last72_positiveculture
     --, me72.spec_type_desc as last72_specimen
     --, me24.positiveculture as next24_positiveculture
@@ -88,7 +86,6 @@ with mv as
     )
     -- added the 19.09.05 - apparently this happens sometimes
     where coalesce(me72.charttime,me72.chartdate,me24.charttime,me24.chartdate) is not null
-
   -- where no_antibiotic > 1 -- see: https://github.com/alistairewj/sepsis3-mimic/issues/12
 )
 , abx_micro_poe_temp as (
@@ -98,7 +95,6 @@ select
   , antibiotic_time
   , last72_charttime
   , next24_charttime
-
   -- suspected_infection flag: redundant with suspected_infection_time
   /*
   , case
@@ -122,7 +118,6 @@ select
         then next24_specimen
     else null
   end as specimen
-
   -- whether the cultured specimen ended up being positive or not
   , case
       when last72_charttime is not null
@@ -152,4 +147,3 @@ extract(EPOCH from a.suspected_infection_time - ad.admittime)
 from abx_micro_poe_temp a
 left join admissions ad
     on a.hadm_id=ad.hadm_id
-

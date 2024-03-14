@@ -1,10 +1,9 @@
-DROP MATERIALIZED VIEW IF EXISTS SOFA_PaO2FiO2 CASCADE;
-CREATE materialized VIEW SOFA_PaO2FiO2 AS
-
+DROP MATERIALIZED VIEW IF EXISTS mimiciii_sofa.SOFA_PaO2FiO2 CASCADE;
+CREATE materialized VIEW mimiciii_sofa.SOFA_PaO2FiO2 AS
 -- adding hadm_id to ventduations
 with vd as (
 select vd.* , ie.hadm_id
-from mimic3_mrosnati.ventdurations vd
+from mimiciii_sofa.ventdurations vd
 left join icustays ie
 on vd.icustay_id = ie.icustay_id
 )
@@ -17,8 +16,7 @@ on vd.icustay_id = ie.icustay_id
 			then 1
             when sum(vd.icustay_id) =0 then -1
 			else 0 end as IsVent
-
- 	from resp_bloodgasfirstdayarterial bg
+ 	from mimiciii_sofa.resp_bloodgasfirstdayarterial bg
 	left join vd
 		on bg.hadm_id = vd.hadm_id
 		and bg.charttime >= vd.starttime
@@ -26,7 +24,6 @@ on vd.icustay_id = ie.icustay_id
 	group by bg.hadm_id,  bg.charttime, PaO2FiO2
 	order by bg.hadm_id, bg.charttime
 )
-
 -- because pafi has an interaction between vent/PaO2:FiO2, we need two columns for the score
 -- it can happen that the lowest unventilated PaO2/FiO2 is 68, but the lowest ventilated PaO2/FiO2 is 120
 -- in this case, the SOFA score is 3, *not* 4.
@@ -43,8 +40,7 @@ select pf.hadm_id
 + date_part('day', age(pf.charttime, ha.admittime))* 24
 + date_part('hour', age(pf.charttime, ha.admittime))
 + round(date_part('minute', age(pf.charttime, ha.admittime))/60)) as HLOS
-
 from pafi1 pf
-left join mimic3.admissions ha
+left join admissions ha
   on ha.hadm_id = pf.hadm_id
 group by pf.hadm_id, HLOS

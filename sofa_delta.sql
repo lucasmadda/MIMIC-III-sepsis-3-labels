@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS sofa_delta CASCADE;
-CREATE TABLE sofa_delta AS
+DROP TABLE IF EXISTS mimiciii_sepsislabels.sofa_delta CASCADE;
+CREATE TABLE mimiciii_sepsislabels.sofa_delta AS
 with case_cohort as (
     select
       so.hadm_id
@@ -26,11 +26,10 @@ with case_cohort as (
         + date_part('day', age(sepsis_time, intime))* 24
         + date_part('hour', age(sepsis_time, intime))
         + round(date_part('minute', age(sepsis_time, intime))/60)) as h_from_intime
-    from sepsis_onset so
+    from mimiciii_sepsislabels.sepsis_onset so
     left join icustays ie
     on so.hadm_id = ie.hadm_id
     where sepsis_time between intime and outtime
-
 )
 select C.*
 , case when sepsis_onset is null then 0 else 1 end as septic

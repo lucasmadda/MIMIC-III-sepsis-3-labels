@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS SI_flag CASCADE;
-CREATE TABLE SI_flag as
+DROP TABLE IF EXISTS mimiciii_si.SI_flag CASCADE;
+CREATE TABLE mimiciii_si.SI_flag as
 with abx as
 (
   select hadm_id
@@ -9,7 +9,7 @@ with abx as
       PARTITION BY hadm_id
       ORDER BY suspected_infection_time
     ) as rn
-  from abx_micro_poe
+  from mimiciii_si.abx_micro_poe
 )
 select
   hadm_id

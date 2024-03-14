@@ -11,13 +11,10 @@
 --        a) documented extubation ends the current ventilation
 --        b) initiation of non-invasive vent and/or oxygen ends the current vent
 -- The ventilation events are numbered consecutively by the `num` column.
-
-
 -- PART I
-
 -- First, create a temporary table to store relevant data from CHARTEVENTS.
-DROP MATERIALIZED VIEW IF EXISTS mimic3_mrosnati.ventsettings CASCADE;
-CREATE MATERIALIZED VIEW mimic3_mrosnati.ventsettings AS
+DROP MATERIALIZED VIEW IF EXISTS mimiciii_sofa.ventsettings CASCADE;
+CREATE MATERIALIZED VIEW mimiciii_sofa.ventsettings AS
 select
   icustay_id, charttime
   -- case statement determining whether it is an instance of mech vent
@@ -103,7 +100,7 @@ select
       end
       )
       as SelfExtubated
-from mimic3.chartevents ce
+from chartevents ce
 where ce.value is not null
 -- exclude rows marked as error
 and ce.error IS DISTINCT FROM 1
@@ -123,10 +120,8 @@ and itemid in
     , 501,502,503,224702 -- PCV
     , 223,667,668,669,670,671,672 -- TCPCV
     , 224701 -- PSVlevel
-
     -- the below are settings used to indicate extubation
     , 640 -- extubated
-
     -- the below indicate oxygen/NIV, i.e. the end of a mechanical vent event
     , 468 -- O2 Delivery Device#2
     , 469 -- O2 Delivery Mode
@@ -135,7 +130,6 @@ and itemid in
     , 227287 -- O2 Flow (additional cannula)
     , 226732 -- O2 Delivery Device(s)
     , 223834 -- O2 Flow
-
     -- used in both oxygen + vent calculation
     , 467 -- O2 Delivery Device
 )
@@ -153,7 +147,7 @@ select
   , 0 as OxygenTherapy
   , 1 as Extubated
   , case when itemid = 225468 then 1 else 0 end as SelfExtubated
-from mimic3.procedureevents_mv
+from procedureevents_mv
 where itemid in
 (
   227194 -- "Extubation"
